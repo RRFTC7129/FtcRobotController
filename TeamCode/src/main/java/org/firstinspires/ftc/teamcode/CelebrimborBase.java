@@ -4,6 +4,7 @@ import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.hardware.bosch.JustLoggingAccelerationIntegrator;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -23,12 +24,12 @@ import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
 
 import java.io.File;
 
-class FirstLeagueBase {
+class CelebrimborBase {
     OpMode opMode;
 
     //Declare all devices
-    DcMotor motorDriveLF, motorDriveLB, motorDriveRF, motorDriveRB, motorWGoal, motorCollection;
-    Servo servoWGoal;
+    DcMotor motorDriveLF, motorDriveLB, motorDriveRF, motorDriveRB, motorArm, motorCollection, motorLaunchL, motorLaunchR;
+    CRServo servoGoal;
     BNO055IMU imu;                   // IMU Gyro itself
     Orientation angles;              // IMU Gyro's Orienting
     // Stores the robot's heading at the end of autonomous to be used in teleop
@@ -57,27 +58,30 @@ class FirstLeagueBase {
     double robotSpeedInFPS;                                   // Robot speed in Feet per second
 
     // Variables used in Autonomous
-    double attemptsToGrabFoundation = 0;         // How many times have we grabbed the foundation?
+    double currentPosition;
+    String targetZone = "A";
     // Variables used in the Teleop drive code
     double angleTest[] = new double[10];         // Last 10 robot headings
     int count = 0;                               // Iterates through the last 10 robot headings
     double sum;                                  // Sum of the last 10 robot headings
     double correct;                              // Angle correction to deal with robot drift
     // Variables used in the Teleop operator code
-    boolean driveCollect = false;                // Does the driver have collection controls?
-    boolean autoTransferEnabled = true;          // Is the automatic transfer system enabled?
-    int hopperState = 0;                         // Is there a stone in the hopper? (1 for full)
+    boolean upFlag;
+    boolean upPersistent;
+    boolean downFlag;
+    boolean downPersistent;
+    double wheelSpeedMultiplier = 1;
     // CONSTANTS
     double ENCODER_CPR = 360;                    // Encoder CPR
     double WHEEL_CURCUMFERENCE = 2.28;           // Wheel circumference of the encoder wheels
     double COUNTS_PER_INCH = ENCODER_CPR / WHEEL_CURCUMFERENCE; // Calculated Counts per Inch on the encoders
     double STARTING_HEADING = 0;                 // Robot Starting Heading
     double STRAFE_WHEEL_OFFSET_CONSTANT = 354;   // Deals with the strafing encoder moving from robot turns
-    double TARGET_POSITION_ACCURACY_IN_INCHES = 0.5; // Accuracy constant for robot travel
+    double TARGET_POSITION_ACCURACY_IN_INCHES = .5; // Accuracy constant for robot travel
     double WAYPOINT_POSITION_ACCURACY_IN_INCHES = 2; // Accuracy constant for robot travel
     double TARGET_HEADING_ACCURACY_IN_DEGREES = 2;   // Accuracy constant for robot turning
 
-    public FirstLeagueBase(OpMode theOpMode) {
+    public CelebrimborBase(OpMode theOpMode) {
         opMode = theOpMode;
 
         // INITIALIZE MOTORS AND SERVOS
@@ -88,11 +92,19 @@ class FirstLeagueBase {
         motorDriveLB = opMode.hardwareMap.dcMotor.get("motorDriveLB");
         motorDriveRF = opMode.hardwareMap.dcMotor.get("motorDriveRF");
         motorDriveRB = opMode.hardwareMap.dcMotor.get("motorDriveRB");
+        motorLaunchL = opMode.hardwareMap.dcMotor.get("motorLaunchL");
+        motorLaunchR = opMode.hardwareMap.dcMotor.get("motorLaunchR");
+        motorArm = opMode.hardwareMap.dcMotor.get("motorArm");
+        motorCollection = opMode.hardwareMap.dcMotor.get("motorCollection");
 
         motorDriveLF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveLB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorLaunchL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorLaunchR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorArm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorCollection.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         motorDriveLF.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveLB.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -102,10 +114,9 @@ class FirstLeagueBase {
         resetEncoders();
         runWithoutEncoders();
 
-        motorCollection = opMode.hardwareMap.dcMotor.get("motorCollection");
 
-        servoWGoal = opMode.hardwareMap.servo.get("servoWGoal");
-        servoWGoal.setPosition(0);
+        servoGoal = opMode.hardwareMap.crservo.get("servoGoal");
+        servoGoal.setPower(0);
 
         // INITIALIZE SENSORS
         opMode.telemetry.addLine("Initalizing input devices (sensors)...");
@@ -121,7 +132,7 @@ class FirstLeagueBase {
         parameters_IMU.loggingEnabled = true;
         parameters_IMU.loggingTag = "IMU";
         parameters_IMU.accelerationIntegrationAlgorithm = new JustLoggingAccelerationIntegrator();
-        imu = opMode.hardwareMap.get(BNO055IMU.class, "imu3");
+        imu = opMode.hardwareMap.get(BNO055IMU.class, "imu");
         imu.initialize(parameters_IMU);
 
         timerOpMode = new ElapsedTime();
@@ -212,28 +223,41 @@ class FirstLeagueBase {
             if(opMode.gamepad1.b) allianceColor = "RED";
         } while(!opMode.gamepad1.x && !opMode.gamepad1.b && isInitialized());
 
-        // Parking Preference?
+        //Target Zone Location?
+        opMode.telemetry.addLine("AwaitingAutonomous Selection...");
+        opMode.telemetry.addData("Target Zone A, Press", "Dpad Left");
+        opMode.telemetry.addData("Target Zone B, Press", "Dpad Up");
+        opMode.telemetry.addData("Target Zone C, Press", "Dpad Right");
+        opMode.telemetry.addData("Test, Press", "Dpad Down");
+        opMode.telemetry.update();
+
+        do{
+            sleep(50);
+            if(opMode.gamepad1.dpad_left) targetZone = "A";
+            if(opMode.gamepad1.dpad_up) targetZone = "B";
+            if(opMode.gamepad1.dpad_right) targetZone = "C";
+            if(opMode.gamepad1.dpad_down) targetZone = "NONE";
+        } while(!opMode.gamepad1.dpad_left && !opMode.gamepad1.dpad_up && !opMode.gamepad1.dpad_right && !opMode.gamepad1.dpad_down && isInitialized());
+
+        /*// Parking Preference?
         opMode.telemetry.addLine("Awaiting Autonomous Selection...");
         opMode.telemetry.addData("To park inside, press", "Y");
         opMode.telemetry.addData("To park outside, press", "A");
         opMode.telemetry.update();
-
         do {
             sleep(50);
             if(opMode.gamepad1.y) parkingPreference = "INSIDE";
             if(opMode.gamepad1.a) parkingPreference = "OUTSIDE";
         } while(!opMode.gamepad1.y && !opMode.gamepad1.a && isInitialized());
-
         // Autonomous Strategy?
         opMode.telemetry.addLine("Awaiting Autonomous Selection...");
         opMode.telemetry.addData("To score the second wobble goal, press", "B");
         opMode.telemetry.addData("To just park, press", "START");
         opMode.telemetry.update();
-
         do {
             sleep(50);
             if(opMode.gamepad1.b) secondWobbleGoal = true;
-        } while(!opMode.gamepad1.x && !opMode.gamepad1.b && !opMode.gamepad1.start && isInitialized());
+        } while(!opMode.gamepad1.x && !opMode.gamepad1.b && !opMode.gamepad1.start && isInitialized());*/
 
         // Display the results.
         opMode.telemetry.addData("All Set! Just press PLAY when ready!", "D");
@@ -279,6 +303,11 @@ class FirstLeagueBase {
         yPosition -= horizontalDistance * Math.cos(Math.toRadians(robotHeading));
 
         opMode.telemetry.addData("Robot Speed in Feet per Second", robotSpeedInFPS);
+        opMode.telemetry.addData("encoderLeft: " , encoderLeft.getCurrentPosition());
+        opMode.telemetry.addData("encoderStrafe: " , encoderStrafe.getCurrentPosition());
+        opMode.telemetry.addData("encoderRight: " , encoderRight.getCurrentPosition());
+        opMode.telemetry.addData("xPosition: ", xPosition);
+        opMode.telemetry.addData("yPosition: ", yPosition);
         opMode.telemetry.update();
     }
 
@@ -319,26 +348,29 @@ class FirstLeagueBase {
                 double angleDirection = Math.atan2(yDelta, xDelta) + Math.toRadians(robotHeading) - Math.toRadians(initialHeading);
                 double powerMod = powerBoost.length > 0 ? powerBoost[0] : 0; // For when we need heavy duty pushing power
                 double powerCurve = Math.sqrt(Math.abs(Math.hypot(xDelta, yDelta))/80);
-                double drivingPower = Range.clip(powerCurve + 0.1 + powerMod, 0, 0.55);
+                double drivingPower = Range.clip(powerCurve + .1 + powerMod, 0, 0.55);
                 double wheelTrajectory = angleDirection - (Math.PI/4);
 
                 desiredSpeedLF -= (drivingPower * (Math.cos(wheelTrajectory))) * Math.sqrt(2);
                 desiredSpeedLB -= (drivingPower * (Math.sin(wheelTrajectory))) * Math.sqrt(2);
-                desiredSpeedRF += (drivingPower * (Math.sin(wheelTrajectory))) * Math.sqrt(2);
-                desiredSpeedRB += (drivingPower * (Math.cos(wheelTrajectory))) * Math.sqrt(2);
+                desiredSpeedRF += (drivingPower * -(Math.sin(wheelTrajectory))) * Math.sqrt(2);
+                desiredSpeedRB += (drivingPower * -(Math.cos(wheelTrajectory))) * Math.sqrt(2);
             }
             // Correct for robot drifting
-            if(Math.abs(offsetHeading) > TARGET_HEADING_ACCURACY_IN_DEGREES) {
+            /*if(Math.abs(offsetHeading) > TARGET_HEADING_ACCURACY_IN_DEGREES) {
                 double turnMod = Range.clip(Math.toRadians(offsetHeading * 1.5), -0.5, 0.5);
                 desiredSpeedLF = Range.clip(desiredSpeedLF - turnMod, -1, 1);
                 desiredSpeedLB = Range.clip(desiredSpeedLB - turnMod, -1, 1);
                 desiredSpeedRF = Range.clip(desiredSpeedRF - turnMod, -1, 1);
                 desiredSpeedRB = Range.clip(desiredSpeedRB - turnMod, -1, 1);
-            }
-
-            setDrivePowerMotors(desiredSpeedLF, desiredSpeedLB, desiredSpeedRF, desiredSpeedRB);
+                opMode.telemetry.addData("offsetHeading", offsetHeading);
+                opMode.telemetry.update();
+            }*/
+            setDrivePowerMotors(-desiredSpeedLF, -desiredSpeedLB, desiredSpeedRF, desiredSpeedRB);
         }
         setDrivePower(0);
+        setDrivePower(0);
+        sleep(500);
         imuTurn(offsetHeading);
     }
 
@@ -364,6 +396,123 @@ class FirstLeagueBase {
         }
         setDrivePower(0);
         sleep(200);
+    }
+
+    public void driveSomewhere(){
+        if (allianceColor == "RED"){
+            if (targetZone == "A"){
+                servoGoal.setPower(1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 18);
+                setDrivePower(0);
+                imuTurn(35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.3, -.3);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 20);
+                setDrivePower(0);
+                imuTurn(-35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.5, -.5);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 76);
+                setDrivePower(0);
+                imuTurn(-88);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 40);
+                setDrivePower(0);
+                servoGoal.setPower(-1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                setDrivePowerSides(-.3, .3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH > -6);
+                setDrivePower(0);
+            }
+            if (targetZone == "B"){
+                servoGoal.setPower(1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 18);
+                setDrivePower(0);
+                opMode.telemetry.addData("Turning 35", "Degrees");
+                opMode.telemetry.update();
+                imuTurn(35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.3, -.3);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 20);
+                setDrivePower(0);
+                opMode.telemetry.addData("Turning 35", "Degrees");
+                opMode.telemetry.update();
+                imuTurn(-35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.5, -.5);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 90);
+                setDrivePower(0);
+                opMode.telemetry.addData("Turning 90", "Degrees");
+                opMode.telemetry.update();
+                imuTurn(-88);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                opMode.telemetry.addData("Driving Forward 20", "inches");
+                opMode.telemetry.update();
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 20);
+                setDrivePower(0);
+                opMode.telemetry.addData("Opening", "Grabber");
+                opMode.telemetry.update();
+                servoGoal.setPower(-1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                opMode.telemetry.addData("Driving Backwards 6", "inches");
+                opMode.telemetry.update();
+                setDrivePowerSides(-.3, .3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH > -6);
+                setDrivePower(0);
+                imuTurn(90);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(-.3, .3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH > -20);
+                setDrivePower(0);
+            }
+            if (targetZone == "C") {
+                servoGoal.setPower(1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 18);
+                setDrivePower(0);
+                imuTurn(35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.3, -.3);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 20);
+                setDrivePower(0);
+                imuTurn(-35);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.5, -.5);
+                do{}while((-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH) - currentPosition < 110);
+                setDrivePower(0);
+                imuTurn(-88);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(.3, -.3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH < 40);
+                setDrivePower(0);
+                servoGoal.setPower(-1);
+                sleep(1000);
+                servoGoal.setPower(0);
+                setDrivePowerSides(-.3, .3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH > -6);
+                setDrivePower(0);
+                imuTurn(90);
+                currentPosition = -motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH;
+                setDrivePowerSides(-.3, .3);
+                do{}while(-motorDriveLB.getCurrentPosition() / COUNTS_PER_INCH > -40);
+                setDrivePower(0);
+            }
+            if (targetZone == "NONE"){
+            }
+        }
+
     }
 
     /** Wait for the end of autonomous to store our heading.*/
@@ -422,7 +571,7 @@ class FirstLeagueBase {
 
         double speed = Math.hypot(opMode.gamepad1.left_stick_x, opMode.gamepad1.left_stick_y);
         double angle = Math.atan2(opMode.gamepad1.left_stick_y, opMode.gamepad1.left_stick_x) - (Math.PI/4);
-        angle += angles.firstAngle + STARTING_HEADING;
+        angle += angles.firstAngle; //+ STARTING_HEADING;
         double turnPower = opMode.gamepad1.right_stick_x;
 
         if(turnPower == 0){
@@ -446,22 +595,72 @@ class FirstLeagueBase {
             }
         }
 
-        motorDriveLF.setPower(((speed * -(Math.cos(angle)) + turnPower)));
-        motorDriveLB.setPower(((speed * -(Math.sin(angle)) + turnPower)));
-        motorDriveRF.setPower(((speed * (Math.sin(angle))) + turnPower));
-        motorDriveRB.setPower(((speed * (Math.cos(angle))) + turnPower));
+        motorDriveLF.setPower(((speed * -(Math.sin(angle)) + turnPower)));
+        motorDriveLB.setPower(((speed * -(Math.cos(angle)) + turnPower)));
+        motorDriveRF.setPower(((speed * (Math.cos(angle))) + turnPower));
+        motorDriveRB.setPower(((speed * (Math.sin(angle))) + turnPower));
 
     }
 
     //===========================================Operator Controls go here:=======================================
 
+    public void controlCollection(){
+        motorCollection.setPower(opMode.gamepad2.left_stick_y);
+    }
+    public void controlWobbleGoal(){
+        motorArm.setPower(opMode.gamepad2.right_stick_y);
 
+        if (opMode.gamepad2.left_bumper){
+            servoGoal.setPower(-1);
+        }
+        else if (opMode.gamepad2.right_bumper){
+            servoGoal.setPower(1);
+        }
+        else {
+            servoGoal.setPower(0);
+        }
+    }
 
+    public void dpadStuffs(){
+        if (opMode.gamepad2.dpad_up){
+            upFlag = true;
+        } else {
+            upFlag = false;
+            upPersistent = false;
+        }
+        if (upFlag && !upPersistent) {
+            if (wheelSpeedMultiplier < 1){wheelSpeedMultiplier += .1;}
+            upPersistent = true;
+        }
 
+        if (opMode.gamepad2.dpad_down){
+            downFlag = true;
+        } else {
+            downFlag = false;
+            downPersistent = false;
+        }
+        if (downFlag && !downPersistent) {
+            if (wheelSpeedMultiplier > .1){wheelSpeedMultiplier -= .1;}
+            downPersistent = true;
+        }
+        opMode.telemetry.addData("wheelSpeedMultiplier", wheelSpeedMultiplier);
+        opMode.telemetry.update();
+    }
 
-
-
-
+    public void controlLauncher(){
+        if (opMode.gamepad2.right_trigger > .1){
+            motorLaunchL.setPower(opMode.gamepad2.right_trigger);
+            motorLaunchR.setPower(-opMode.gamepad2.right_trigger * wheelSpeedMultiplier);
+        }
+        else if (opMode.gamepad2.left_trigger > .1){
+            motorLaunchL.setPower(-opMode.gamepad2.left_trigger);
+            motorLaunchR.setPower(opMode.gamepad2.left_trigger * wheelSpeedMultiplier);
+        }
+        else {
+            motorLaunchL.setPower(0);
+            motorLaunchR.setPower(0);
+        }
+    }
 
     /** All telemetry readings are posted down here.*/
     public void postTelemetry() {

@@ -1,21 +1,21 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-@Disabled
-@Autonomous(name="First League Auto", group="")
-public class FirstLeagueAuto extends LinearOpMode {
+//@Disabled
+@Autonomous(name="Celebrimbor Auto", group="")
+public class CelebrimborAuto extends LinearOpMode {
 
-    FirstLeagueBase base;
+    CelebrimborBase base;
 
     @Override
     public void runOpMode() throws InterruptedException {
-        base = new FirstLeagueBase(this);
+        base = new CelebrimborBase(this);
         base.selection();
         waitForStart();
         base.timerOpMode.reset();
-        base.waitForEnd();
-        base.storeHeading();
+        base.driveSomewhere();
+        //base.waitForEnd();
+        //base.storeHeading();
     }
 }
