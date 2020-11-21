@@ -1,9 +1,6 @@
 package org.firstinspires.ftc.teamcode;
-
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -15,21 +12,14 @@ import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
 import org.openftc.easyopencv.OpenCvPipeline;
-
-//@Disabled
-@Autonomous(name="Celebrimbor Auto", group="")
-public class CelebrimborAuto extends LinearOpMode {
+@TeleOp(name="UltimateGoalVision", group="OpMode")
+public class UltimateGoalVision extends LinearOpMode
+{
     OpenCvCamera webcam;
     SkystoneDeterminationPipeline pipeline;
-    CelebrimborBase base;
-    int positionNumber = 0;
-
     @Override
-    public void runOpMode() throws InterruptedException {
-        base = new CelebrimborBase(this);
-        base.selection();
-        waitForStart();
-        base.timerOpMode.reset();
+    public void runOpMode()
+    {
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
         webcam = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "webcam"), cameraMonitorViewId);
         pipeline = new SkystoneDeterminationPipeline();
@@ -46,29 +36,22 @@ public class CelebrimborAuto extends LinearOpMode {
                 webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_LEFT);
             }
         });
-        while (opModeIsActive() && base.timerOpMode.seconds() < 5){
+        waitForStart();
+        while (opModeIsActive())
+        {
             telemetry.addData("Analysis", pipeline.getAnalysis());
             telemetry.addData("Position", pipeline.position);
             telemetry.update();
+            // Don't burn CPU cycles busy-looping in this sample
             sleep(50);
         }
-       /* telemetry.addData("Analysis", pipeline.getAnalysis());
-        telemetry.addData("Position", pipeline.position);
-        telemetry.update();*/
-        if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.NONE){positionNumber = 0;}
-        if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.ONE){positionNumber = 1;}
-        if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.FOUR){positionNumber = 4;}
-        base.determineTargetZone(positionNumber);
-        base.driveSomewhere();
-        base.waitForEnd();
-        base.storeHeading();
     }
     public static class SkystoneDeterminationPipeline extends OpenCvPipeline
     {
         /*
          * An enum to define the skystone position
          */
-        enum RingPosition
+        public enum RingPosition
         {
             FOUR,
             ONE,
@@ -103,7 +86,7 @@ public class CelebrimborAuto extends LinearOpMode {
         Mat Cb = new Mat();
         int avg1;
         // Volatile since accessed by OpMode thread w/o synchronization
-        private volatile RingPosition position = RingPosition.ONE;
+        private volatile RingPosition position = RingPosition.FOUR;
         /*
          * This function takes the RGB frame, converts to YCrCb,
          * and extracts the Cb channel to the 'Cb' variable

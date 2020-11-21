@@ -23,5 +23,6 @@ public class CelebrimborTeleop extends OpMode {
         base.dpadStuffs();
         base.controlLauncher();
         base.controlWobbleGoal();
+        base.unlatchCollection();
     }
 }
