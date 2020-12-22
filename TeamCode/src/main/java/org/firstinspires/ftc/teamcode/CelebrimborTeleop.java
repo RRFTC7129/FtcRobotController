@@ -11,7 +11,7 @@ public class CelebrimborTeleop extends OpMode {
     @Override
     public void init() {
         base = new CelebrimborBase(this);
-        base.retrieveHeading();
+        base.retrieveHeading(); //Pull the final heading from autonomous and use it to correct the field centric code
     }
 
     @Override
@@ -19,10 +19,10 @@ public class CelebrimborTeleop extends OpMode {
         base.postTelemetry();
         base.resetHeading(); //Allows for manually resetting the robot heading in teleop to correct the field centric code
         base.updateDriveTrain(); //Field Centric Mecanum Drive Code
-        base.controlCollection();
-        base.dpadStuffs();
-        base.controlLauncher();
-        base.controlWobbleGoal();
-        base.unlatchCollection();
+        base.controlCollection(); //Collection and Transfer Controls
+        base.dpadStuffs(); //Logic for Varying Launcher Speed
+        base.controlLauncher(); //Launcher Controls
+        base.controlWobbleGoal(); //Wobble Goal Controls
+        base.unlatchCollection(); //In case the collection doesn't come down in autonomous, the driver can fix that here
     }
 }
