@@ -354,7 +354,6 @@ class CelebrimborBase {
         }
         setDrivePower(0);
         setDrivePower(0);
-        sleep(500);
         imuTurn(offsetHeading);
     }
 
@@ -379,7 +378,6 @@ class CelebrimborBase {
             setDrivePowerSides(-TURN_POWER, -TURN_POWER);
         }
         setDrivePower(0);
-        sleep(200);
     }
 
     public void determineTargetZone(int positionNumber){
@@ -394,7 +392,7 @@ class CelebrimborBase {
                 servoGoal.setPower(0);
                 travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(-45);
-                travelToPosition(29, 51, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
+                travelToPosition(27, 51, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(45);
                 travelToPosition(28, 79, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
@@ -539,7 +537,7 @@ class CelebrimborBase {
 
         double speed = Math.hypot(opMode.gamepad1.left_stick_x, opMode.gamepad1.left_stick_y);
         double angle = Math.atan2(opMode.gamepad1.left_stick_y, opMode.gamepad1.left_stick_x) - (Math.PI/4);
-        angle += angles.firstAngle + STARTING_HEADING;
+        angle += angles.firstAngle - (Math.PI)/2 + STARTING_HEADING;
         double turnPower = opMode.gamepad1.right_stick_x;
 
         if(turnPower == 0){
@@ -650,6 +648,8 @@ class CelebrimborBase {
         updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
         opMode.telemetry.addLine();
         opMode.telemetry.addData("Running for...", timerOpMode.seconds());
+        opMode.telemetry.addLine();
+        opMode.telemetry.addData("RobotHeading", angles.firstAngle + STARTING_HEADING);
         opMode.telemetry.update();
     }
 }
