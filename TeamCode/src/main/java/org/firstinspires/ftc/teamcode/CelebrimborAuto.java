@@ -52,21 +52,18 @@ public class CelebrimborAuto extends LinearOpMode {
             telemetry.update();
             sleep(50);
         }
-       /* telemetry.addData("Analysis", pipeline.getAnalysis());
-        telemetry.addData("Position", pipeline.position);
-        telemetry.update();*/
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.NONE){positionNumber = 0;}
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.ONE){positionNumber = 1;}
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.FOUR){positionNumber = 4;}
-        base.determineTargetZone(positionNumber);
-        base.driveSomewhere();
-        base.waitForEnd();
-        base.storeHeading();
+        base.determineTargetZone(positionNumber); //Sets the position determined in the autonomous class to the position variable in the base class
+        base.autonomousPath(); //The autonomous path code
+        base.waitForEnd(); //Waits for the end before storing the final heading
+        base.storeHeading(); //Stores the robot's final heading to be used to correct the teleop field centric code
     }
     public static class SkystoneDeterminationPipeline extends OpenCvPipeline
     {
         /*
-         * An enum to define the skystone position
+         * An enum to define the Target Zone position
          */
         enum RingPosition
         {
