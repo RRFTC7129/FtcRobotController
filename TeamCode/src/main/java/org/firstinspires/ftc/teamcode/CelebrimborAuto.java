@@ -84,7 +84,7 @@ public class CelebrimborAuto extends LinearOpMode {
         // width: 40 height: 40
         static final int REGION_WIDTH = 100;
         static final int REGION_HEIGHT = 45;
-        final int FOUR_RING_THRESHOLD = 137;
+        final int FOUR_RING_THRESHOLD = 134;
         final int ONE_RING_THRESHOLD = 129;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,

@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 import com.qualcomm.robotcore.util.ReadWriteFile;
@@ -37,11 +38,12 @@ class CelebrimborBase {
     // Timers
     ElapsedTime timerOpMode;         // Tells us how long the Opmode is running since it started.
     ElapsedTime timerTravel;         // Used to cancel a robot turn in case we lock up.
+    ElapsedTime timerLauncher;       // Used to stop the firing function if it's taking too long
+    ElapsedTime timerSpeedControl;   // Used in the proportional speed control for the launcher
 
     // Variables used in Path Selection
     String allianceColor;                                     // What's our alliance color?
     String parkingPreference;                                 // Where do we want to park at the end?
-    boolean secondWobbleGoal = false;
     // Variables used in Odometry
     double leftWheelTickDelta = 0;                            // Change in left encoder rotation
     double rightWheelTickDelta = 0;                           // Change in right encoder rotation
@@ -58,7 +60,6 @@ class CelebrimborBase {
     double robotSpeedInFPS;                                   // Robot speed in Feet per second
 
     // Variables used in Autonomous
-    double currentPosition;
     int numberPosition = 1;
     // Variables used in the Teleop drive code
     double angleTest[] = new double[10];         // Last 10 robot headings
@@ -66,11 +67,22 @@ class CelebrimborBase {
     double sum;                                  // Sum of the last 10 robot headings
     double correct;                              // Angle correction to deal with robot drift
     // Variables used in the Teleop operator code
+    double pastEncoderR = 0;
+    double pastEncoderL = 0;
+    double launchSpeedR;
+    double launchSpeedL;
+    double newSpeedR;
+    double newSpeedL;
     boolean upFlag;
+    boolean upFlag2;
     boolean upPersistent;
+    boolean upPersistent2;
     boolean downFlag;
+    boolean downFlag2;
     boolean downPersistent;
+    boolean downPersistent2;
     double wheelSpeedMultiplier = .9;
+    double wheelSpeedMultiplier2 = .25;
     // CONSTANTS
     double ENCODER_CPR = 360;                    // Encoder CPR
     double WHEEL_CURCUMFERENCE = 2.28;           // Wheel circumference of the encoder wheels
@@ -80,6 +92,8 @@ class CelebrimborBase {
     double TARGET_POSITION_ACCURACY_IN_INCHES = .5; // Accuracy constant for robot travel
     double WAYPOINT_POSITION_ACCURACY_IN_INCHES = 2; // Accuracy constant for robot travel
     double TARGET_HEADING_ACCURACY_IN_DEGREES = 2;   // Accuracy constant for robot turning
+    double LAUNCHER_SPEED_R = -1875;
+    double LAUNCHER_SPEED_L = 1325;
 
     public CelebrimborBase(OpMode theOpMode) {
         opMode = theOpMode;
@@ -96,6 +110,9 @@ class CelebrimborBase {
         motorLaunchR = opMode.hardwareMap.dcMotor.get("motorLaunchR");
         motorArm = opMode.hardwareMap.dcMotor.get("motorArm");
         motorCollection = opMode.hardwareMap.dcMotor.get("motorCollection");
+
+        //motorLaunchL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        motorLaunchR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         motorDriveLF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveLB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -125,8 +142,6 @@ class CelebrimborBase {
         opMode.telemetry.addLine("Initalizing input devices (sensors)...");
         opMode.telemetry.update();
 
-
-
         BNO055IMU.Parameters parameters_IMU = new BNO055IMU.Parameters();
         parameters_IMU.angleUnit = BNO055IMU.AngleUnit.RADIANS;
         parameters_IMU.accelUnit = BNO055IMU.AccelUnit.METERS_PERSEC_PERSEC;
@@ -139,6 +154,8 @@ class CelebrimborBase {
 
         timerOpMode = new ElapsedTime();
         timerTravel = new ElapsedTime();
+        timerLauncher = new ElapsedTime();
+        timerSpeedControl = new ElapsedTime();
 
         opMode.telemetry.addLine("Initialization Succeeded!");
         opMode.telemetry.update();
@@ -188,6 +205,26 @@ class CelebrimborBase {
         motorDriveLB.setPower(motorPowerLB);
         motorDriveRF.setPower(motorPowerRF);
         motorDriveRB.setPower(motorPowerRB);
+    }
+
+    public void autoLaunch(double time){ //
+        timerLauncher.reset();
+        while (timerLauncher.seconds() < time){
+                if (timerSpeedControl.seconds() > .05){
+                    launchSpeedR = (motorLaunchR.getCurrentPosition() - pastEncoderR)/.05;
+                    launchSpeedL = (motorLaunchL.getCurrentPosition() - pastEncoderL)/.05;
+                    timerSpeedControl.reset();
+                    pastEncoderR = motorLaunchR.getCurrentPosition();
+                    pastEncoderL = motorLaunchL.getCurrentPosition();
+                }
+            //fancy math stuff
+            newSpeedR = (LAUNCHER_SPEED_R + launchSpeedR) * .00005; //multiply error by a constant
+            newSpeedL = (LAUNCHER_SPEED_L - launchSpeedL) * .0005;
+
+            motorLaunchL.setPower(wheelSpeedMultiplier2 + newSpeedL); //add additional speed proportionally to how far off it is from the ideal speed
+            motorLaunchR.setPower(-wheelSpeedMultiplier - newSpeedR);
+        }
+
     }
 
     /* =======================AUTONOMOUS EXCLUSIVE METHODS========================= */
@@ -369,7 +406,7 @@ class CelebrimborBase {
                 targetHeading < 0 ? 360 : 0;
 
         timerTravel.reset();
-        while (Math.abs(degreesToTurn) > 5 && ((LinearOpMode)opMode).opModeIsActive() && timerTravel.seconds() <= 2) {
+        while (Math.abs(degreesToTurn) > 2 && ((LinearOpMode)opMode).opModeIsActive() && timerTravel.seconds() <= 2) {
             updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
             currentHeading = angles.firstAngle + 73;
             degreesToTurn = targetHeading - currentHeading;
@@ -392,7 +429,7 @@ class CelebrimborBase {
                 servoGoal.setPower(0);
                 travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(-45);
-                travelToPosition(27, 51, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
+                travelToPosition(27, 50, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(45);
                 travelToPosition(28, 79, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
@@ -423,7 +460,7 @@ class CelebrimborBase {
                 servoGoal.setPower(0);
                 travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(-45);
-                travelToPosition(29, 51, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
+                travelToPosition(27, 50, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
                 imuTurn(45);
                 travelToPosition(52, 105, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
@@ -433,14 +470,14 @@ class CelebrimborBase {
                 servoCollectionRaise.setPower(-1);      //Release Collection
                 sleep(500);
                 servoCollectionRaise.setPower(0);
-                servoLimit.setPosition(0);      //Spin up Launcher
-                motorLaunchL.setPower(30);
-                motorLaunchR.setPower(-20);
-                sleep(1000);
+                servoLimit.setPosition(0);
+                motorLaunchL.setPower(25);      //Spin up Launcher
+                motorLaunchR.setPower(-90);
+                sleep(2000);
                 servoLimit.setPosition(1);
                 sleep(500);
-                motorCollection.setPower(100);      //Begin Launching Rings
-                sleep(4000);
+                motorCollection.setPower(90);      //Begin Launching Rings
+                autoLaunch(4);       //sleep(4000);
                 motorLaunchL.setPower(0);
                 motorLaunchR.setPower(0);
                 motorCollection.setPower(0);
@@ -604,7 +641,7 @@ class CelebrimborBase {
             upPersistent = false;
         }
         if (upFlag && !upPersistent) {
-            if (wheelSpeedMultiplier < 1){wheelSpeedMultiplier += .1;}
+            if (wheelSpeedMultiplier < 1){wheelSpeedMultiplier += .05;}
             upPersistent = true;
         }
 
@@ -615,18 +652,52 @@ class CelebrimborBase {
             downPersistent = false;
         }
         if (downFlag && !downPersistent) {
-            if (wheelSpeedMultiplier > .1){wheelSpeedMultiplier -= .1;}
+            if (wheelSpeedMultiplier > .1){wheelSpeedMultiplier -= .05;}
             downPersistent = true;
+        }
+
+
+        if (opMode.gamepad2.dpad_right){
+            upFlag2 = true;
+        } else {
+            upFlag2 = false;
+            upPersistent2 = false;
+        }
+        if (upFlag2 && !upPersistent2) {
+            if (wheelSpeedMultiplier2 < 1){wheelSpeedMultiplier2 += .05;}
+            upPersistent2 = true;
+        }
+
+        if (opMode.gamepad2.dpad_left){
+            downFlag2 = true;
+        } else {
+            downFlag2 = false;
+            downPersistent2 = false;
+        }
+        if (downFlag2 && !downPersistent2) {
+            if (wheelSpeedMultiplier2 > .1){wheelSpeedMultiplier2 -= .05;}
+            downPersistent2 = true;
         }
     }
 
     public void controlLauncher(){
         if (opMode.gamepad2.right_trigger > .1){
-            motorLaunchL.setPower(opMode.gamepad2.right_trigger);
-            motorLaunchR.setPower(-opMode.gamepad2.right_trigger * wheelSpeedMultiplier);
+            if (timerSpeedControl.seconds() > .05){
+                launchSpeedR = (motorLaunchR.getCurrentPosition() - pastEncoderR)/.05; // Encoder Ticks per Second
+                launchSpeedL = (motorLaunchL.getCurrentPosition() - pastEncoderL)/.05;
+                timerSpeedControl.reset();
+                pastEncoderR = motorLaunchR.getCurrentPosition();
+                pastEncoderL = motorLaunchL.getCurrentPosition();
+            }
+            //fancy math stuff
+            newSpeedR = (LAUNCHER_SPEED_R + launchSpeedR) * .00005; //multiply error by a constant
+            newSpeedL = (LAUNCHER_SPEED_L - launchSpeedL) * .0005;
+
+            motorLaunchL.setPower(opMode.gamepad2.right_trigger * wheelSpeedMultiplier2 + newSpeedL); //add additional speed proportionally to how
+            motorLaunchR.setPower(-opMode.gamepad2.right_trigger * wheelSpeedMultiplier - newSpeedR);
         }
         else if (opMode.gamepad2.left_trigger > .1){
-            motorLaunchL.setPower(-opMode.gamepad2.left_trigger);
+            motorLaunchL.setPower(-opMode.gamepad2.left_trigger * wheelSpeedMultiplier2);
             motorLaunchR.setPower(opMode.gamepad2.left_trigger * wheelSpeedMultiplier);
         }
         else {
@@ -644,12 +715,16 @@ class CelebrimborBase {
     /** All telemetry readings are posted down here.*/
     public void postTelemetry() {
         opMode.telemetry.addData("wheelSpeedMultiplier", wheelSpeedMultiplier);
-        opMode.telemetry.addLine();
-        updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
-        opMode.telemetry.addLine();
+        opMode.telemetry.addData("wheelSpeedMultiplier2", wheelSpeedMultiplier2);
+        opMode.telemetry.addData("launchSpeedR", launchSpeedR);
+        opMode.telemetry.addData("launchSpeedL", launchSpeedL);
+        opMode.telemetry.addData("launcherR", newSpeedR);
+        opMode.telemetry.addData("launcherL", newSpeedL);
+        //updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
+        //opMode.telemetry.addLine();
         opMode.telemetry.addData("Running for...", timerOpMode.seconds());
         opMode.telemetry.addLine();
-        opMode.telemetry.addData("RobotHeading", angles.firstAngle + STARTING_HEADING);
-        opMode.telemetry.update();
+        //opMode.telemetry.addData("RobotHeading", angles.firstAngle + STARTING_HEADING);
+        //opMode.telemetry.update();
     }
 }
