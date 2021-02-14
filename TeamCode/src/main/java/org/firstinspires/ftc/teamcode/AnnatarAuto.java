@@ -17,16 +17,16 @@ import org.openftc.easyopencv.OpenCvCameraRotation;
 import org.openftc.easyopencv.OpenCvPipeline;
 
 //@Disabled
-@Autonomous(name="Celebrimbor Auto", group="")
-public class CelebrimborAuto extends LinearOpMode {
+@Autonomous(name="Annatar Auto", group="")
+public class AnnatarAuto extends LinearOpMode {
     OpenCvCamera webcam;
     SkystoneDeterminationPipeline pipeline;
-    CelebrimborBase base;
+    AnnatarBase base;
     int positionNumber = 0;
 
     @Override
     public void runOpMode() throws InterruptedException {
-        base = new CelebrimborBase(this);
+        base = new AnnatarBase(this);
         base.selection();
         waitForStart();
         base.timerOpMode.reset();
@@ -43,10 +43,10 @@ public class CelebrimborAuto extends LinearOpMode {
             @Override
             public void onOpened()
             {
-                webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_LEFT);
+                webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_RIGHT);
             }
         });
-        while (opModeIsActive() && base.timerOpMode.seconds() < 5){
+        while (opModeIsActive() && base.timerOpMode.seconds() < 4){
             telemetry.addData("Analysis", pipeline.getAnalysis());
             telemetry.addData("Position", pipeline.position);
             telemetry.update();
@@ -56,7 +56,11 @@ public class CelebrimborAuto extends LinearOpMode {
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.ONE){positionNumber = 1;}
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.FOUR){positionNumber = 4;}
         base.determineTargetZone(positionNumber); //Sets the position determined in the autonomous class to the position variable in the base class
-        base.autonomousPath(); //The autonomous path code
+        webcam.closeCameraDevice();
+        base.resetEncoders();
+        base.runWithoutEncoders();
+        base.deliverWobbleGoal(); //Deliver the Wobble Goal
+        base.launchRings(); //Launch the Rings
         base.waitForEnd(); //Waits for the end before storing the final heading
         base.storeHeading(); //Stores the robot's final heading to be used to correct the teleop field centric code
     }
@@ -82,10 +86,10 @@ public class CelebrimborAuto extends LinearOpMode {
         //x:130 y:210
         static final Point REGION1_TOPLEFT_ANCHOR_POINT = new Point(65 ,178);
         // width: 40 height: 40
-        static final int REGION_WIDTH = 100;
-        static final int REGION_HEIGHT = 45;
-        final int FOUR_RING_THRESHOLD = 134;
-        final int ONE_RING_THRESHOLD = 129;
+        static final int REGION_WIDTH = 130;
+        static final int REGION_HEIGHT = 65;
+        final int FOUR_RING_THRESHOLD = 132;
+        final int ONE_RING_THRESHOLD = 127;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,
                 REGION1_TOPLEFT_ANCHOR_POINT.y);

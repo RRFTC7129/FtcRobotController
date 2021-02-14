@@ -22,13 +22,14 @@ import org.openftc.easyopencv.OpenCvCamera;
 
 import java.io.File;
 
-class CelebrimborBase {
+import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.gamepad2;
+
+class AnnatarBase {
     OpMode opMode;
 
     //Declare all devices
-    DcMotor motorDriveLF, motorDriveLB, motorDriveRF, motorDriveRB, motorArm, motorCollection, motorLaunchL, motorLaunchR;
-    CRServo servoGoal, servoCollectionRaise;
-    Servo servoLimit;
+    DcMotor motorDriveLF, motorDriveLB, motorDriveRF, motorDriveRB, motorArm, motorCollection, motorLaunch, motorTransfer;
+    CRServo servoGoal, servoCollectionRaise, servoLaunchAngle, servoLaunchAngle2;
     BNO055IMU imu;                   // IMU Gyro itself
     Orientation angles;              // IMU Gyro's Orienting
     //Camera
@@ -40,6 +41,7 @@ class CelebrimborBase {
     ElapsedTime timerTravel;         // Used to cancel a robot turn in case we lock up.
     ElapsedTime timerLauncher;       // Used to stop the firing function if it's taking too long
     ElapsedTime timerSpeedControl;   // Used in the proportional speed control for the launcher
+    ElapsedTime timerLaunchControl;
 
     // Variables used in Path Selection
     String allianceColor;                                     // What's our alliance color?
@@ -67,12 +69,11 @@ class CelebrimborBase {
     double sum;                                  // Sum of the last 10 robot headings
     double correct;                              // Angle correction to deal with robot drift
     // Variables used in the Teleop operator code
-    double pastEncoderR = 0;
-    double pastEncoderL = 0;
-    double launchSpeedR;
-    double launchSpeedL;
-    double newSpeedR;
-    double newSpeedL;
+    double pastEncoderP = 0;
+    double pastEncoderI = 0;
+    double launchSpeed;
+    double accumulatedError;
+    double newSpeed;
     boolean upFlag;
     boolean upFlag2;
     boolean upPersistent;
@@ -81,8 +82,13 @@ class CelebrimborBase {
     boolean downFlag2;
     boolean downPersistent;
     boolean downPersistent2;
-    double wheelSpeedMultiplier = .9;
-    double wheelSpeedMultiplier2 = .25;
+    double wheelSpeedMultiplier = 1;
+    boolean powerShots = false;
+    int finalTransferTargetPosition;
+    double targetPosition1;
+    double target;
+    double currentTransferMotorEncoderPosition;
+    double rotation = 1736;
     // CONSTANTS
     double ENCODER_CPR = 360;                    // Encoder CPR
     double WHEEL_CURCUMFERENCE = 2.28;           // Wheel circumference of the encoder wheels
@@ -92,10 +98,9 @@ class CelebrimborBase {
     double TARGET_POSITION_ACCURACY_IN_INCHES = .5; // Accuracy constant for robot travel
     double WAYPOINT_POSITION_ACCURACY_IN_INCHES = 2; // Accuracy constant for robot travel
     double TARGET_HEADING_ACCURACY_IN_DEGREES = 2;   // Accuracy constant for robot turning
-    double LAUNCHER_SPEED_R = -1875;
-    double LAUNCHER_SPEED_L = 1325;
+    double LAUNCHER_SPEED = 4000;
 
-    public CelebrimborBase(OpMode theOpMode) {
+    public AnnatarBase(OpMode theOpMode) {
         opMode = theOpMode;
 
         // INITIALIZE MOTORS AND SERVOS
@@ -106,37 +111,31 @@ class CelebrimborBase {
         motorDriveLB = opMode.hardwareMap.dcMotor.get("motorDriveLB");
         motorDriveRF = opMode.hardwareMap.dcMotor.get("motorDriveRF");
         motorDriveRB = opMode.hardwareMap.dcMotor.get("motorDriveRB");
-        motorLaunchL = opMode.hardwareMap.dcMotor.get("motorLaunchL");
-        motorLaunchR = opMode.hardwareMap.dcMotor.get("motorLaunchR");
+        motorLaunch = opMode.hardwareMap.dcMotor.get("motorLaunch");
         motorArm = opMode.hardwareMap.dcMotor.get("motorArm");
         motorCollection = opMode.hardwareMap.dcMotor.get("motorCollection");
+        motorTransfer = opMode.hardwareMap.dcMotor.get("motorTransfer");
 
-        //motorLaunchL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        motorLaunchR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        servoLaunchAngle = opMode.hardwareMap.crservo.get("servoLaunchAngle");
+        servoLaunchAngle2 = opMode.hardwareMap.crservo.get("servoLaunchAngle2");
+        servoGoal = opMode.hardwareMap.crservo.get("servoGoal");
+        servoGoal.setPower(0);
 
         motorDriveLF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveLB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        motorLaunchL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        motorLaunchR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorLaunch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorArm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorCollection.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorTransfer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         motorDriveLF.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveLB.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveRF.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveRB.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        resetEncoders();
-        runWithoutEncoders();
-
-
-        servoGoal = opMode.hardwareMap.crservo.get("servoGoal");
-        servoGoal.setPower(0);
-        servoCollectionRaise = opMode.hardwareMap.crservo.get("servoCollectionRaise");
-        servoLimit = opMode.hardwareMap.servo.get("servoLimit");
-        servoLimit.setPosition(0);
+        //servoCollectionRaise = opMode.hardwareMap.crservo.get("servoCollectionRaise");
 
         // INITIALIZE SENSORS
         opMode.telemetry.addLine("Initalizing input devices (sensors)...");
@@ -156,6 +155,7 @@ class CelebrimborBase {
         timerTravel = new ElapsedTime();
         timerLauncher = new ElapsedTime();
         timerSpeedControl = new ElapsedTime();
+        timerLaunchControl = new ElapsedTime();
 
         opMode.telemetry.addLine("Initialization Succeeded!");
         opMode.telemetry.update();
@@ -168,6 +168,7 @@ class CelebrimborBase {
         motorDriveLB.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motorDriveRF.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motorDriveRB.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorTransfer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
     }
 
     /** ... And now we set them to run without the encoders!
@@ -177,6 +178,7 @@ class CelebrimborBase {
         motorDriveLB.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         motorDriveRF.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         motorDriveRB.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
     }
 
     /** Set power to ALL drivetrain motors. Uses setDrivePowerSides() for simplicity.
@@ -207,24 +209,29 @@ class CelebrimborBase {
         motorDriveRB.setPower(motorPowerRB);
     }
 
-    public void autoLaunch(double time){ //
+    public void autoLaunch(double time){
+        motorLaunch.setPower(1);      //Spin up Launcher
+        sleep(500);
+        motorTransfer.setPower(-1);
         timerLauncher.reset();
+        //Speed Controller
         while (timerLauncher.seconds() < time){
-                if (timerSpeedControl.seconds() > .05){
-                    launchSpeedR = (motorLaunchR.getCurrentPosition() - pastEncoderR)/.05;
-                    launchSpeedL = (motorLaunchL.getCurrentPosition() - pastEncoderL)/.05;
-                    timerSpeedControl.reset();
-                    pastEncoderR = motorLaunchR.getCurrentPosition();
-                    pastEncoderL = motorLaunchL.getCurrentPosition();
-                }
+            if (timerSpeedControl.seconds() > .05){
+                launchSpeed = (motorLaunch.getCurrentPosition() - pastEncoderP)/.05;
+                timerSpeedControl.reset();
+                pastEncoderP = motorLaunch.getCurrentPosition();
+            }
             //fancy math stuff
-            newSpeedR = (LAUNCHER_SPEED_R + launchSpeedR) * .00005; //multiply error by a constant
-            newSpeedL = (LAUNCHER_SPEED_L - launchSpeedL) * .0005;
-
-            motorLaunchL.setPower(wheelSpeedMultiplier2 + newSpeedL); //add additional speed proportionally to how far off it is from the ideal speed
-            motorLaunchR.setPower(-wheelSpeedMultiplier - newSpeedR);
+            newSpeed = (LAUNCHER_SPEED + launchSpeed) * .00003; //multiply error by a constant
+            //motorLaunch.setPower(wheelSpeedMultiplier - newSpeed + .5); //add additional speed proportionally to how far off it is from the ideal speed
+            motorLaunch.setPower(1); //Full power, no speed control FIX THIS BEFORE QUALIFIER
+            opMode.telemetry.addData("launchSpeed", launchSpeed);
+            opMode.telemetry.addData("newSpeed", newSpeed);
+            opMode.telemetry.update();
         }
 
+        motorLaunch.setPower(0);
+        motorTransfer.setPower(0);
     }
 
     /* =======================AUTONOMOUS EXCLUSIVE METHODS========================= */
@@ -262,17 +269,17 @@ class CelebrimborBase {
             if(opMode.gamepad1.b) allianceColor = "RED";
         } while(!opMode.gamepad1.x && !opMode.gamepad1.b && isInitialized());
 
-        /*// Parking Preference?
+        // Power Shots?
         opMode.telemetry.addLine("Awaiting Autonomous Selection...");
-        opMode.telemetry.addData("To park inside, press", "Y");
-        opMode.telemetry.addData("To park outside, press", "A");
+        opMode.telemetry.addData("For power shots, press", "Y");
+        opMode.telemetry.addData("For high goal, press", "A");
         opMode.telemetry.update();
         do {
             sleep(50);
-            if(opMode.gamepad1.y) parkingPreference = "INSIDE";
-            if(opMode.gamepad1.a) parkingPreference = "OUTSIDE";
+            if(opMode.gamepad1.y) powerShots = true;
+            if(opMode.gamepad1.a) powerShots = false;
         } while(!opMode.gamepad1.y && !opMode.gamepad1.a && isInitialized());
-        // Autonomous Strategy?
+        /*// Autonomous Strategy?
         opMode.telemetry.addLine("Awaiting Autonomous Selection...");
         opMode.telemetry.addData("To score the second wobble goal, press", "B");
         opMode.telemetry.addData("To just park, press", "START");
@@ -299,13 +306,13 @@ class CelebrimborBase {
         // STEP 1: Calculate the Delta (change) of the ticks and robot heading since last update
         leftWheelTickDelta = -(encoderLeft.getCurrentPosition() - leftWheelTickDeltaPrevious);
         rightWheelTickDelta = (encoderRight.getCurrentPosition() - rightWheelTickDeltaPrevious);
-        strafeWheelTickDelta = -(encoderStrafe.getCurrentPosition() - strafeWheelTickDeltaPrevious);
+        strafeWheelTickDelta = -(-encoderStrafe.getCurrentPosition() - strafeWheelTickDeltaPrevious);
 
         leftWheelTickDeltaPrevious = encoderLeft.getCurrentPosition();
         rightWheelTickDeltaPrevious = encoderRight.getCurrentPosition();
-        strafeWheelTickDeltaPrevious = encoderStrafe.getCurrentPosition();
+        strafeWheelTickDeltaPrevious = -encoderStrafe.getCurrentPosition();
 
-        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES);
+        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.DEGREES); //ZYX
         robotHeading = angles.firstAngle + initialHeading;
         robotHeadingDelta = robotHeading - robotHeadingPrevious;
 
@@ -327,7 +334,7 @@ class CelebrimborBase {
 
         opMode.telemetry.addData("Robot Speed in Feet per Second", robotSpeedInFPS);
         opMode.telemetry.addData("encoderLeft: " , encoderLeft.getCurrentPosition());
-        opMode.telemetry.addData("encoderStrafe: " , encoderStrafe.getCurrentPosition());
+        opMode.telemetry.addData("encoderStrafe: " , -encoderStrafe.getCurrentPosition());
         opMode.telemetry.addData("encoderRight: " , encoderRight.getCurrentPosition());
         opMode.telemetry.addData("xPosition: ", xPosition);
         opMode.telemetry.addData("yPosition: ", yPosition);
@@ -421,100 +428,76 @@ class CelebrimborBase {
         numberPosition = positionNumber;    //Sets the position determined in the autonomous class to the position variable in the base class
     }
 
-    public void autonomousPath(){
+    public void deliverWobbleGoal(){
         if (allianceColor == "RED"){
             if (numberPosition == 0){
+                servoLaunchAngle.setPower(1);
+                servoLaunchAngle2.setPower(1);
+                servoGoal.setPower(-1);
+                sleep(500);
+                servoGoal.setPower(0);
+                motorArm.setPower(.5);
+                sleep(350);
+                motorArm.setPower(0);
                 servoGoal.setPower(1);      //Grab Wobble Goal
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(-45);
-                travelToPosition(27, 50, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(45);
-                travelToPosition(28, 79, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
+                travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-81, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(28, 73, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES);
-                travelToPosition(51, 65, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoCollectionRaise.setPower(-1);      //Release Collection
-                sleep(500);
-                servoCollectionRaise.setPower(0);
-                servoLimit.setPosition(0);      //Spin up Launcher
-                motorLaunchL.setPower(50);
-                motorLaunchR.setPower(-40);
                 sleep(1000);
-                servoLimit.setPosition(1);
-                sleep(500);
-                motorCollection.setPower(100);      //Begin Launching Rings
-                sleep(4000);
-                motorLaunchL.setPower(0);
-                motorLaunchR.setPower(0);
-                motorCollection.setPower(0);
-                servoLimit.setPosition(0);
-                travelToPosition(52, 78, 90, TARGET_POSITION_ACCURACY_IN_INCHES);       //Park on Launch Line
             }
-            if (numberPosition == 1){
+            else if (numberPosition == 1){
+                servoLaunchAngle.setPower(1);
+                servoLaunchAngle2.setPower(1);
+                servoGoal.setPower(-1);
+                sleep(500);
+                servoGoal.setPower(0);
+                motorArm.setPower(.5);
+                sleep(350);
+                motorArm.setPower(0);
                 servoGoal.setPower(1);      //Grab Wobble Goal
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(-45);
-                travelToPosition(27, 50, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(45);
-                travelToPosition(52, 105, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
+                travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-105, 0, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(52, 70, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoCollectionRaise.setPower(-1);      //Release Collection
-                sleep(500);
-                servoCollectionRaise.setPower(0);
-                servoLimit.setPosition(0);
-                motorLaunchL.setPower(25);      //Spin up Launcher
-                motorLaunchR.setPower(-90);
-                sleep(2000);
-                servoLimit.setPosition(1);
-                sleep(500);
-                motorCollection.setPower(90);      //Begin Launching Rings
-                autoLaunch(4);       //sleep(4000);
-                motorLaunchL.setPower(0);
-                motorLaunchR.setPower(0);
-                motorCollection.setPower(0);
-                servoLimit.setPosition(0);
-                travelToPosition(52, 78, 90, TARGET_POSITION_ACCURACY_IN_INCHES);       //Park on Launch Line
+                travelToPosition(-90, 15, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
             }
-            if (numberPosition == 4) {
+            else if (numberPosition == 4){
+                servoLaunchAngle.setPower(1);
+                servoLaunchAngle2.setPower(1);
+                servoGoal.setPower(-1);
+                sleep(500);
+                servoGoal.setPower(0);
+                motorArm.setPower(.5);
+                sleep(350);
+                motorArm.setPower(0);
                 servoGoal.setPower(1);      //Grab Wobble Goal
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(0, 17, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(-45);
-                travelToPosition(29, 51, 45, TARGET_POSITION_ACCURACY_IN_INCHES);
-                imuTurn(45);
-                travelToPosition(27, 122, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoGoal.setPower(-1);     //Release Wobble Goal in Target Zone
+                travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-128, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
-                travelToPosition(28, 112, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES);
-                travelToPosition(50, 70, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-                servoCollectionRaise.setPower(-1);      //Release Collection
-                sleep(500);
-                servoCollectionRaise.setPower(0);
-                servoLimit.setPosition(0);      //Spin up Launcher
-                motorLaunchL.setPower(30);
-                motorLaunchR.setPower(-20);
-                sleep(1000);
-                servoLimit.setPosition(1);
-                sleep(500);
-                motorCollection.setPower(100);      //Begin Launching Rings
-                sleep(4000);
-                motorLaunchL.setPower(0);
-                motorLaunchR.setPower(0);
-                motorCollection.setPower(0);
-                servoLimit.setPosition(0);
-                travelToPosition(52, 78, 90, TARGET_POSITION_ACCURACY_IN_INCHES);       //Park on Launch Line
+                travelToPosition(-122, -15, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
             }
+        }
+    }
+
+    public void launchRings(){
+        if (allianceColor == "RED"){
+            travelToPosition(-81, -10, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
+            servoLaunchAngle.setPower(0);
+            servoLaunchAngle2.setPower(0);
+            travelToPosition(-115, -15, 0, TARGET_POSITION_ACCURACY_IN_INCHES); //-110, -30 really close. Just come back a tiny bit
+            autoLaunch(5);
+            travelToPosition(-100, -20 , 0, TARGET_POSITION_ACCURACY_IN_INCHES);
         }
     }
 
@@ -570,11 +553,11 @@ class CelebrimborBase {
     /** Updates drivetrain motor powers based on the driver's right and left joysticks.
      * Uses Field-centric Driver control for easier driving.*/
     public void updateDriveTrain() {
-        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.RADIANS);
+        angles = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.RADIANS); //AxesOrder.ZYX  //workingish: xyz
 
         double speed = Math.hypot(opMode.gamepad1.left_stick_x, opMode.gamepad1.left_stick_y);
-        double angle = Math.atan2(opMode.gamepad1.left_stick_y, opMode.gamepad1.left_stick_x) - (Math.PI/4);
-        angle += angles.firstAngle - (Math.PI)/2 + STARTING_HEADING;
+        double angle = Math.atan2(opMode.gamepad1.left_stick_y, opMode.gamepad1.left_stick_x) - (Math.PI/4); // PI/4
+        angle += angles.firstAngle - (Math.PI) + STARTING_HEADING; //angle += angles.firstAngle - (Math.PI)/2 + STARTING_HEADING;
         double turnPower = opMode.gamepad1.right_stick_x;
 
         if(turnPower == 0){
@@ -605,27 +588,41 @@ class CelebrimborBase {
 
     }
 
-    public void unlatchCollection(){
-        if (opMode.gamepad1.right_bumper){
-            servoCollectionRaise.setPower(-1);
-        }
-        else if (opMode.gamepad1.left_bumper){
-            servoCollectionRaise.setPower(1);
-        }
-    }
-
     //===========================================Operator Controls go here:=======================================
 
     public void controlCollection(){
-        motorCollection.setPower(-opMode.gamepad2.left_stick_y);
+        motorCollection.setPower(opMode.gamepad2.left_stick_y);
+    }
+    public void controlTransfer() {
+        motorTransfer.setPower(-opMode.gamepad2.right_stick_x);
+
+
+        if (opMode.gamepad2.right_bumper) {
+            rotation = 1736;
+            currentTransferMotorEncoderPosition = motorTransfer.getCurrentPosition();
+            targetPosition1 = (currentTransferMotorEncoderPosition / rotation); //537.6
+            target = Math.round(targetPosition1);
+            finalTransferTargetPosition = (int) (target * rotation); //537.6 //4 turns to bring ring all the way up
+            motorTransfer.setTargetPosition(finalTransferTargetPosition);
+            motorTransfer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motorTransfer.setPower(.5);
+        }
+        else {
+            motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        }
+
+        if (opMode.gamepad2.dpad_up){
+            resetEncoders();
+            runWithoutEncoders();
+        }
     }
     public void controlWobbleGoal(){
-        motorArm.setPower(-opMode.gamepad2.right_stick_y);
+        motorArm.setPower(-opMode.gamepad2.right_stick_y * 2);
 
-        if (opMode.gamepad2.left_bumper){
+        if (opMode.gamepad1.left_bumper){
             servoGoal.setPower(-1);
         }
-        else if (opMode.gamepad2.right_bumper){
+        else if (opMode.gamepad1.right_bumper){
             servoGoal.setPower(1);
         }
         else {
@@ -655,76 +652,48 @@ class CelebrimborBase {
             if (wheelSpeedMultiplier > .1){wheelSpeedMultiplier -= .05;}
             downPersistent = true;
         }
-
-
-        if (opMode.gamepad2.dpad_right){
-            upFlag2 = true;
-        } else {
-            upFlag2 = false;
-            upPersistent2 = false;
-        }
-        if (upFlag2 && !upPersistent2) {
-            if (wheelSpeedMultiplier2 < 1){wheelSpeedMultiplier2 += .05;}
-            upPersistent2 = true;
-        }
-
-        if (opMode.gamepad2.dpad_left){
-            downFlag2 = true;
-        } else {
-            downFlag2 = false;
-            downPersistent2 = false;
-        }
-        if (downFlag2 && !downPersistent2) {
-            if (wheelSpeedMultiplier2 > .1){wheelSpeedMultiplier2 -= .05;}
-            downPersistent2 = true;
-        }
     }
 
     public void controlLauncher(){
         if (opMode.gamepad2.right_trigger > .1){
             if (timerSpeedControl.seconds() > .05){
-                launchSpeedR = (motorLaunchR.getCurrentPosition() - pastEncoderR)/.05; // Encoder Ticks per Second
-                launchSpeedL = (motorLaunchL.getCurrentPosition() - pastEncoderL)/.05;
+                launchSpeed = (motorLaunch.getCurrentPosition() - pastEncoderP)/.05; // Encoder Ticks per Second
                 timerSpeedControl.reset();
-                pastEncoderR = motorLaunchR.getCurrentPosition();
-                pastEncoderL = motorLaunchL.getCurrentPosition();
+                pastEncoderP = motorLaunch.getCurrentPosition();
             }
             //fancy math stuff
-            newSpeedR = (LAUNCHER_SPEED_R + launchSpeedR) * .00005; //multiply error by a constant
-            newSpeedL = (LAUNCHER_SPEED_L - launchSpeedL) * .0005;
+            newSpeed = (LAUNCHER_SPEED - launchSpeed) * .00003; //multiply error by a constant
 
-            motorLaunchL.setPower(opMode.gamepad2.right_trigger * wheelSpeedMultiplier2 + newSpeedL); //add additional speed proportionally to how
-            motorLaunchR.setPower(-opMode.gamepad2.right_trigger * wheelSpeedMultiplier - newSpeedR);
+            motorLaunch.setPower(wheelSpeedMultiplier + newSpeed + .2); //add additional speed proportionally to how far off we are
+            //motorLaunch.setPower(opMode.gamepad2.right_trigger * wheelSpeedMultiplier);
         }
         else if (opMode.gamepad2.left_trigger > .1){
-            motorLaunchL.setPower(-opMode.gamepad2.left_trigger * wheelSpeedMultiplier2);
-            motorLaunchR.setPower(opMode.gamepad2.left_trigger * wheelSpeedMultiplier);
+            motorLaunch.setPower(-opMode.gamepad2.left_trigger * wheelSpeedMultiplier);
         }
         else {
-            motorLaunchL.setPower(0);
-            motorLaunchR.setPower(0);
+            motorLaunch.setPower(0);
         }
-        if (opMode.gamepad2.a){
-            servoLimit.setPosition(0);
+        // Raise & Lower Launch Angle
+        if (opMode.gamepad1.dpad_up){
+            servoLaunchAngle.setPower(1);
+            servoLaunchAngle2.setPower(1);
         }
-        if (opMode.gamepad2.y){
-            servoLimit.setPosition(1);
+        else if (opMode.gamepad1.dpad_down){
+            servoLaunchAngle.setPower(-1);
+            servoLaunchAngle2.setPower(-1);
+        }
+        else {
+            servoLaunchAngle.setPower(0);
+            servoLaunchAngle2.setPower(0);
         }
     }
 
     /** All telemetry readings are posted down here.*/
     public void postTelemetry() {
-        opMode.telemetry.addData("wheelSpeedMultiplier", wheelSpeedMultiplier);
-        opMode.telemetry.addData("wheelSpeedMultiplier2", wheelSpeedMultiplier2);
-        opMode.telemetry.addData("launchSpeedR", launchSpeedR);
-        opMode.telemetry.addData("launchSpeedL", launchSpeedL);
-        opMode.telemetry.addData("launcherR", newSpeedR);
-        opMode.telemetry.addData("launcherL", newSpeedL);
+        opMode.telemetry.addData("launchSpeed", launchSpeed);
+        opMode.telemetry.addData("newSpeed", newSpeed);
         //updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
-        //opMode.telemetry.addLine();
         opMode.telemetry.addData("Running for...", timerOpMode.seconds());
-        opMode.telemetry.addLine();
-        //opMode.telemetry.addData("RobotHeading", angles.firstAngle + STARTING_HEADING);
-        //opMode.telemetry.update();
+        opMode.telemetry.update();
     }
 }
