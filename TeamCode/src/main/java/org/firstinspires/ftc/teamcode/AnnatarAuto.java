@@ -83,9 +83,7 @@ public class AnnatarAuto extends LinearOpMode {
         /*
          * The core values which define the location and size of the sample regions
          */
-        //x:130 y:210
         static final Point REGION1_TOPLEFT_ANCHOR_POINT = new Point(65 ,178);
-        // width: 40 height: 40
         static final int REGION_WIDTH = 130;
         static final int REGION_HEIGHT = 65;
         final int FOUR_RING_THRESHOLD = 132;

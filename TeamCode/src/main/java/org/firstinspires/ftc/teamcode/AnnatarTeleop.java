@@ -21,9 +21,10 @@ public class AnnatarTeleop extends OpMode {
         base.updateDriveTrain(); //Field Centric Mecanum Drive Code
         base.controlCollection(); //Collection and Transfer Controls
         base.dpadStuffs(); //Logic for Varying Launcher Speed
-        base.controlLauncher(); //Launcher Controls
+       // base.controlLauncher(); //Launcher Controls
         base.controlTransfer();
+        base.autoTransfer();
+        base.sensorTest();
         base.controlWobbleGoal(); //Wobble Goal Controls
-        //base.unlatchCollection(); //In case the collection doesn't come down in autonomous, the driver can fix that here
     }
 }
