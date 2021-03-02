@@ -36,6 +36,7 @@ class AnnatarBase {
     Orientation angles;              // IMU Gyro's Orienting
     //External Sensors
     DistanceSensor sensorTransfer;
+    DistanceSensor sensorLauncher;
     //Camera
     OpenCvCamera webcam;
     // Stores the robot's heading at the end of autonomous to be used in teleop
@@ -67,6 +68,7 @@ class AnnatarBase {
 
     // Variables used in Autonomous
     int numberPosition = 1;
+    boolean launchNow;
     // Variables used in the Teleop drive code
     double angleTest[] = new double[10];         // Last 10 robot headings
     int count = 0;                               // Iterates through the last 10 robot headings
@@ -82,6 +84,10 @@ class AnnatarBase {
     boolean upPersistent;
     boolean downFlag;
     boolean downPersistent;
+    boolean pressed = false;
+    boolean pressed2 = false;
+    boolean launchForwards = false;
+    boolean launchBackwards = false;
     double wheelSpeedMultiplier = 1;
     boolean powerShots = false;
     int finalTransferTarget;
@@ -116,13 +122,13 @@ class AnnatarBase {
         motorDriveLB = opMode.hardwareMap.dcMotor.get("motorDriveLB");
         motorDriveRF = opMode.hardwareMap.dcMotor.get("motorDriveRF");
         motorDriveRB = opMode.hardwareMap.dcMotor.get("motorDriveRB");
-       // motorLaunch = opMode.hardwareMap.dcMotor.get("motorLaunch");   !!!!!!!!!!
+        motorLaunch = opMode.hardwareMap.dcMotor.get("motorLaunch");
         motorArm = opMode.hardwareMap.dcMotor.get("motorArm");
         motorCollection = opMode.hardwareMap.dcMotor.get("motorCollection");
         motorTransfer = opMode.hardwareMap.dcMotor.get("motorTransfer");
 
-        //servoLaunchAngle = opMode.hardwareMap.crservo.get("servoLaunchAngle");  !!!!!!!!!
-        //servoLaunchAngle2 = opMode.hardwareMap.crservo.get("servoLaunchAngle2");   !!!!!!!!!!!
+        servoLaunchAngle = opMode.hardwareMap.crservo.get("servoLaunchAngle");
+        servoLaunchAngle2 = opMode.hardwareMap.crservo.get("servoLaunchAngle2");
         servoGoal = opMode.hardwareMap.crservo.get("servoGoal");
         servoGoal.setPower(0);
 
@@ -130,7 +136,7 @@ class AnnatarBase {
         motorDriveLB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRF.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorDriveRB.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        //motorLaunch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);   !!!!!!!!!
+        motorLaunch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorArm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorCollection.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorTransfer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -139,8 +145,6 @@ class AnnatarBase {
         motorDriveLB.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveRF.setDirection(DcMotorSimple.Direction.FORWARD);
         motorDriveRB.setDirection(DcMotorSimple.Direction.FORWARD);
-
-        //servoCollectionRaise = opMode.hardwareMap.crservo.get("servoCollectionRaise");
 
         // INITIALIZE SENSORS
         opMode.telemetry.addLine("Initalizing input devices (sensors)...");
@@ -157,6 +161,7 @@ class AnnatarBase {
         imu.initialize(parameters_IMU);
 
         sensorTransfer = opMode.hardwareMap.get(DistanceSensor.class, "sensorTransfer");
+        sensorLauncher = opMode.hardwareMap.get(DistanceSensor.class, "sensorLauncher");
 
         timerOpMode = new ElapsedTime();
         timerTravel = new ElapsedTime();
@@ -186,6 +191,7 @@ class AnnatarBase {
         motorDriveRF.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         motorDriveRB.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        motorLaunch.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
     }
 
     /** Set power to ALL drivetrain motors. Uses setDrivePowerSides() for simplicity.
@@ -261,15 +267,6 @@ class AnnatarBase {
             if(opMode.gamepad1.y) powerShots = true;
             if(opMode.gamepad1.a) powerShots = false;
         } while(!opMode.gamepad1.y && !opMode.gamepad1.a && isInitialized());
-        /*// Autonomous Strategy?
-        opMode.telemetry.addLine("Awaiting Autonomous Selection...");
-        opMode.telemetry.addData("To score the second wobble goal, press", "B");
-        opMode.telemetry.addData("To just park, press", "START");
-        opMode.telemetry.update();
-        do {
-            sleep(50);
-            if(opMode.gamepad1.b) secondWobbleGoal = true;
-        } while(!opMode.gamepad1.x && !opMode.gamepad1.b && !opMode.gamepad1.start && isInitialized());*/
 
         // Display the results.
         opMode.telemetry.addData("All Set! Just press PLAY when ready!", "D");
@@ -280,8 +277,8 @@ class AnnatarBase {
 
     public void autoLaunch(double time){
         motorLaunch.setPower(1);      //Spin up Launcher
-        sleep(500);
-        motorTransfer.setPower(-1);
+        sleep(2000);
+        motorTransfer.setPower(-.6);
         timerLauncher.reset();
         //Speed Controller
         while (timerLauncher.seconds() < time){
@@ -292,11 +289,17 @@ class AnnatarBase {
             }
             //fancy math stuff
             newSpeed = (LAUNCHER_SPEED + launchSpeed) * .00003; //multiply error by a constant
-            //motorLaunch.setPower(wheelSpeedMultiplier - newSpeed + .5); //add additional speed proportionally to how far off it is from the ideal speed
-            motorLaunch.setPower(1); //Full power, no speed control FIX THIS BEFORE QUALIFIER
+            motorLaunch.setPower(wheelSpeedMultiplier - newSpeed + .5); //add additional speed proportionally to how far off it is from the ideal speed
             opMode.telemetry.addData("launchSpeed", launchSpeed);
             opMode.telemetry.addData("newSpeed", newSpeed);
             opMode.telemetry.update();
+
+            if (sensorLauncher.getDistance(DistanceUnit.CM) <= 2){
+                sleep(100);
+                motorTransfer.setPower(0);
+                sleep(1000);
+                motorTransfer.setPower(-.6);
+            }
         }
 
         motorLaunch.setPower(0);
@@ -450,10 +453,12 @@ class AnnatarBase {
                 sleep(750);
                 servoGoal.setPower(0);
                 travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
-                travelToPosition(-81, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-81, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
+                servoLaunchAngle.setPower(0);
+                servoLaunchAngle2.setPower(0);
                 sleep(1000);
             }
             else if (numberPosition == 1){
@@ -469,10 +474,12 @@ class AnnatarBase {
                 sleep(750);
                 servoGoal.setPower(0);
                 travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
-                travelToPosition(-105, 0, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-105, 0, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
+                servoLaunchAngle.setPower(0);
+                servoLaunchAngle2.setPower(0);
                 travelToPosition(-90, 15, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
             }
             else if (numberPosition == 4){
@@ -488,10 +495,12 @@ class AnnatarBase {
                 sleep(750);
                 servoGoal.setPower(0);
                 travelToPosition(-65, 20, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
-                travelToPosition(-128, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-128, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
+                servoLaunchAngle.setPower(0);
+                servoLaunchAngle2.setPower(0);
                 travelToPosition(-122, -15, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
             }
         }
@@ -500,11 +509,15 @@ class AnnatarBase {
     public void launchRings(){
         if (allianceColor == "RED"){
             travelToPosition(-81, -10, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
-            servoLaunchAngle.setPower(0);
-            servoLaunchAngle2.setPower(0);
-            travelToPosition(-115, -15, 0, TARGET_POSITION_ACCURACY_IN_INCHES); //-110, -30 really close. Just come back a tiny bit
-            autoLaunch(5);
+            travelToPosition(-120, 5, 0, TARGET_POSITION_ACCURACY_IN_INCHES); //-115 -15 0
+            autoLaunch(6.5);
             travelToPosition(-100, -20 , 0, TARGET_POSITION_ACCURACY_IN_INCHES);
+        }
+    }
+
+    public void launchTest(){
+        if (allianceColor != "RED"){
+            autoLaunch(7);
         }
     }
 
@@ -601,19 +614,13 @@ class AnnatarBase {
         motorCollection.setPower(opMode.gamepad2.left_stick_y);
     }
 
-    public void sensorTest(){
+    public void autoTransfer(){
+        // Updates the proximity sensor's readings.
         if (sensorTransfer.getDistance(DistanceUnit.INCH) <= .7){
             autoTransfer = true;
         }
         else {
             autoTransfer = false;
-        }
-    }
-
-    public void autoTransfer(){
-        // Updates the proximity sensor's readings.
-        if (opMode.gamepad2.dpad_right){
-            autoTransfer = true;
         }
         // State machines allow us to run a sequence program within an updating loop.
         switch(transfer.ordinal())  {
@@ -632,10 +639,10 @@ class AnnatarBase {
                     transfer = TransferState.RAISING;
                 break;
             case 2:
-                transferTarget = (int) currentTransferPosition - 1650;
+                transferTarget = (int) currentTransferPosition - 750;
                 motorTransfer.setTargetPosition(transferTarget);
-                motorTransfer.setPower(-1);
-                if (motorTransfer.getCurrentPosition() <= currentTransferPosition - 1650){ //Lower the linkage onto the stone
+                motorTransfer.setPower(-.5);
+                if (motorTransfer.getCurrentPosition() <= currentTransferPosition - 750){
                     motorTransfer.setPower(0);
                     transfer = TransferState.IDLE;
                     autoTransfer = false;
@@ -648,7 +655,7 @@ class AnnatarBase {
 
             //Lock the transfer in the ready to collect position
             if (opMode.gamepad2.right_bumper) {
-                rotation = 1736; //Number of ticks for one full rotation
+                rotation = 750; //Number of ticks for one full rotation
                 currentTransferPosition = motorTransfer.getCurrentPosition();
                 targetPosition1 = (currentTransferPosition / rotation);
                 target = Math.round(targetPosition1);
@@ -680,7 +687,7 @@ class AnnatarBase {
         }
     }
 
-    public void dpadStuffs(){
+    public void flywheelSpeed(){
         if (opMode.gamepad2.dpad_up){
             upFlag = true;
         } else {
@@ -704,8 +711,15 @@ class AnnatarBase {
         }
     }
 
-    /*public void controlLauncher(){
-        if (opMode.gamepad2.right_trigger > .1){
+    public void controlLauncher(){
+        if (opMode.gamepad2.y){
+            launchForwards = true;
+        }
+        if (opMode.gamepad2.a){
+            launchForwards = false;
+        }
+
+        if (launchForwards == true){
             if (timerSpeedControl.seconds() > .05){
                 launchSpeed = (motorLaunch.getCurrentPosition() - pastEncoderP)/.05; // Encoder Ticks per Second
                 timerSpeedControl.reset();
@@ -714,10 +728,11 @@ class AnnatarBase {
             //fancy math stuff
             newSpeed = (LAUNCHER_SPEED - launchSpeed) * .00003; //multiply error by a constant
 
-            motorLaunch.setPower(wheelSpeedMultiplier + newSpeed + .2); //add additional speed proportionally to how far off we are
+            //motorLaunch.setPower(wheelSpeedMultiplier + newSpeed + .2); //add additional speed proportionally to how far off we are
+            motorLaunch.setPower(1 * wheelSpeedMultiplier);
         }
         else if (opMode.gamepad2.left_trigger > .1){
-            motorLaunch.setPower(-opMode.gamepad2.left_trigger * wheelSpeedMultiplier);
+            motorLaunch.setPower(-1 * wheelSpeedMultiplier);
         }
         else {
             motorLaunch.setPower(0);
@@ -735,15 +750,24 @@ class AnnatarBase {
             servoLaunchAngle.setPower(0);
             servoLaunchAngle2.setPower(0);
         }
-    }*/
+    }
+
+    public void testSensor(){
+        if (sensorLauncher.getDistance(DistanceUnit.CM) <= 2){
+            launchNow = false;
+        }
+        else {
+            launchNow = true;
+        }
+    }
 
     /** All telemetry readings are posted down here.*/
     public void postTelemetry() {
         opMode.telemetry.addData("launchSpeed", launchSpeed);
         opMode.telemetry.addData("newSpeed", newSpeed);
         //updateOdometry(motorDriveLB, motorDriveRB, motorDriveLF);
-        opMode.telemetry.addData("autoTransfer", autoTransfer);
-        opMode.telemetry.addData("mototTransfer", motorTransfer.getCurrentPosition());
+        opMode.telemetry.addData("motorTransfer", motorTransfer.getCurrentPosition());
+        opMode.telemetry.addData("launchNow", launchNow);
         opMode.telemetry.addData("Running for...", timerOpMode.seconds());
         opMode.telemetry.update();
     }

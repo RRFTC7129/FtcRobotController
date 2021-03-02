@@ -33,7 +33,7 @@ public class UltimateGoalVision extends LinearOpMode
             @Override
             public void onOpened()
             {
-                webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_LEFT);
+                webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_RIGHT);
             }
         });
         waitForStart();
@@ -68,10 +68,10 @@ public class UltimateGoalVision extends LinearOpMode
         //x:130 y:210
         static final Point REGION1_TOPLEFT_ANCHOR_POINT = new Point(65 ,178);
         // width: 40 height: 40
-        static final int REGION_WIDTH = 100;
-        static final int REGION_HEIGHT = 45;
-        final int FOUR_RING_THRESHOLD = 137;
-        final int ONE_RING_THRESHOLD = 129;
+        static final int REGION_WIDTH = 130;
+        static final int REGION_HEIGHT = 65;
+        final int FOUR_RING_THRESHOLD = 133;
+        final int ONE_RING_THRESHOLD = 128;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,
                 REGION1_TOPLEFT_ANCHOR_POINT.y);

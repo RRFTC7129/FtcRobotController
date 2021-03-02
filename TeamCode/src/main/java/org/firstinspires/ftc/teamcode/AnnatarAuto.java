@@ -59,6 +59,7 @@ public class AnnatarAuto extends LinearOpMode {
         webcam.closeCameraDevice();
         base.resetEncoders();
         base.runWithoutEncoders();
+        base.launchTest();
         base.deliverWobbleGoal(); //Deliver the Wobble Goal
         base.launchRings(); //Launch the Rings
         base.waitForEnd(); //Waits for the end before storing the final heading
@@ -87,7 +88,7 @@ public class AnnatarAuto extends LinearOpMode {
         static final int REGION_WIDTH = 130;
         static final int REGION_HEIGHT = 65;
         final int FOUR_RING_THRESHOLD = 132;
-        final int ONE_RING_THRESHOLD = 127;
+        final int ONE_RING_THRESHOLD = 129;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,
                 REGION1_TOPLEFT_ANCHOR_POINT.y);
