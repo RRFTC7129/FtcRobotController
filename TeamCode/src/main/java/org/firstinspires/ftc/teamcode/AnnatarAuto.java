@@ -1,9 +1,6 @@
 package org.firstinspires.ftc.teamcode;
-
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -15,7 +12,6 @@ import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
 import org.openftc.easyopencv.OpenCvPipeline;
-
 //@Disabled
 @Autonomous(name="Annatar Auto", group="")
 public class AnnatarAuto extends LinearOpMode {
@@ -23,12 +19,10 @@ public class AnnatarAuto extends LinearOpMode {
     SkystoneDeterminationPipeline pipeline;
     AnnatarBase base;
     int positionNumber = 0;
-
     @Override
     public void runOpMode() throws InterruptedException {
         base = new AnnatarBase(this);
         base.selection();
-        waitForStart();
         base.timerOpMode.reset();
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
         webcam = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "webcam"), cameraMonitorViewId);
@@ -46,7 +40,7 @@ public class AnnatarAuto extends LinearOpMode {
                 webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_RIGHT);
             }
         });
-        while (opModeIsActive() && base.timerOpMode.seconds() < 4){
+        while (opModeIsActive() && base.timerOpMode.seconds() < 8){
             telemetry.addData("Analysis", pipeline.getAnalysis());
             telemetry.addData("Position", pipeline.position);
             telemetry.update();
@@ -59,11 +53,14 @@ public class AnnatarAuto extends LinearOpMode {
         webcam.closeCameraDevice();
         base.resetEncoders();
         base.runWithoutEncoders();
-        base.launchTest();
         base.deliverWobbleGoal(); //Deliver the Wobble Goal
         base.launchRings(); //Launch the Rings
         base.waitForEnd(); //Waits for the end before storing the final heading
         base.storeHeading(); //Stores the robot's final heading to be used to correct the teleop field centric code
+        waitForStart();
+        telemetry.addData("Analysis", pipeline.getAnalysis());
+        telemetry.addData("Position", pipeline.position);
+        telemetry.update();
     }
     public static class SkystoneDeterminationPipeline extends OpenCvPipeline
     {
@@ -84,11 +81,13 @@ public class AnnatarAuto extends LinearOpMode {
         /*
          * The core values which define the location and size of the sample regions
          */
+        //x:130 y:210
         static final Point REGION1_TOPLEFT_ANCHOR_POINT = new Point(65 ,178);
+        // width: 40 height: 40
         static final int REGION_WIDTH = 130;
         static final int REGION_HEIGHT = 65;
         final int FOUR_RING_THRESHOLD = 132;
-        final int ONE_RING_THRESHOLD = 129;
+        final int ONE_RING_THRESHOLD = 127;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,
                 REGION1_TOPLEFT_ANCHOR_POINT.y);

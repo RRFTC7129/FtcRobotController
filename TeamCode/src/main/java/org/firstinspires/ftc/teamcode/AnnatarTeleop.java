@@ -12,6 +12,8 @@ public class AnnatarTeleop extends OpMode {
     public void init() {
         base = new AnnatarBase(this);
         base.retrieveHeading(); //Pull the final heading from autonomous and use it to correct the field centric code
+        base.resetEncoders();
+        base.runWithoutEncoders();
     }
 
     @Override
@@ -22,9 +24,9 @@ public class AnnatarTeleop extends OpMode {
         base.controlCollection(); //Collection and Transfer Controls
         base.flywheelSpeed(); //Logic for Varying Launcher Speed
         base.controlLauncher(); //Launcher Controls
-        base.controlTransfer();
-        base.autoTransfer();
-        base.testSensor();
+        base.controlTransfer(); //Transfer Controls
+        base.autoTransfer(); //Automatically lift rings once in transfer
+        base.launchAngle(); //Change Launch Angle
         base.controlWobbleGoal(); //Wobble Goal Controls
     }
 }
