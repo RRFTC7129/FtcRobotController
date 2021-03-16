@@ -77,7 +77,7 @@ public class UltimateGoalVision extends LinearOpMode
                 REGION1_TOPLEFT_ANCHOR_POINT.y);
         Point region1_pointB = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x + REGION_WIDTH,
-                REGION1_TOPLEFT_ANCHOR_POINT.y + REGION_HEIGHT);
+                REGION1_TOPLEFT_ANCHOR_POINT.y - REGION_HEIGHT);
         /*
          * Working variables
          */
@@ -111,7 +111,7 @@ public class UltimateGoalVision extends LinearOpMode
                     input, // Buffer to draw on
                     region1_pointA, // First point which defines the rectangle
                     region1_pointB, // Second point which defines the rectangle
-                    BLUE, // The color the rectangle is drawn in
+                    GREEN, // The color the rectangle is drawn in
                     2); // Thickness of the rectangle lines
             position = RingPosition.FOUR; // Record our analysis
             if(avg1 > FOUR_RING_THRESHOLD){
@@ -125,8 +125,8 @@ public class UltimateGoalVision extends LinearOpMode
                     input, // Buffer to draw on
                     region1_pointA, // First point which defines the rectangle
                     region1_pointB, // Second point which defines the rectangle
-                    GREEN, // The color the rectangle is drawn in
-                    -1); // Negative thickness means solid fill
+                    BLUE, // The color the rectangle is drawn in
+                    1); // Negative thickness means solid fill
             return input;
         }
         public int getAnalysis()
