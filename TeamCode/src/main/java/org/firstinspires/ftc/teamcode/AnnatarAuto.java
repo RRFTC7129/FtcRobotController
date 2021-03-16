@@ -40,16 +40,17 @@ public class AnnatarAuto extends LinearOpMode {
                 webcam.startStreaming(320,240, OpenCvCameraRotation.SIDEWAYS_RIGHT);
             }
         });
-        while (opModeIsActive() && base.timerOpMode.seconds() < 8){
+        for (int i = 0; i < 4; i++){
             telemetry.addData("Analysis", pipeline.getAnalysis());
             telemetry.addData("Position", pipeline.position);
             telemetry.update();
-            sleep(50);
+            sleep(2000);
         }
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.NONE){positionNumber = 0;}
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.ONE){positionNumber = 1;}
         if (pipeline.position == SkystoneDeterminationPipeline.RingPosition.FOUR){positionNumber = 4;}
         base.determineTargetZone(positionNumber); //Sets the position determined in the autonomous class to the position variable in the base class
+        waitForStart();
         webcam.closeCameraDevice();
         base.resetEncoders();
         base.runWithoutEncoders();
@@ -57,7 +58,6 @@ public class AnnatarAuto extends LinearOpMode {
         base.launchRings(); //Launch the Rings
         base.waitForEnd(); //Waits for the end before storing the final heading
         base.storeHeading(); //Stores the robot's final heading to be used to correct the teleop field centric code
-        waitForStart();
         telemetry.addData("Analysis", pipeline.getAnalysis());
         telemetry.addData("Position", pipeline.position);
         telemetry.update();
@@ -86,14 +86,14 @@ public class AnnatarAuto extends LinearOpMode {
         // width: 40 height: 40
         static final int REGION_WIDTH = 130;
         static final int REGION_HEIGHT = 65;
-        final int FOUR_RING_THRESHOLD = 132;
-        final int ONE_RING_THRESHOLD = 127;
+        final int FOUR_RING_THRESHOLD = 133;
+        final int ONE_RING_THRESHOLD = 128;
         Point region1_pointA = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x,
                 REGION1_TOPLEFT_ANCHOR_POINT.y);
         Point region1_pointB = new Point(
                 REGION1_TOPLEFT_ANCHOR_POINT.x + REGION_WIDTH,
-                REGION1_TOPLEFT_ANCHOR_POINT.y + REGION_HEIGHT);
+                REGION1_TOPLEFT_ANCHOR_POINT.y - REGION_HEIGHT);
         /*
          * Working variables
          */
@@ -141,8 +141,8 @@ public class AnnatarAuto extends LinearOpMode {
                     input, // Buffer to draw on
                     region1_pointA, // First point which defines the rectangle
                     region1_pointB, // Second point which defines the rectangle
-                    GREEN, // The color the rectangle is drawn in
-                    -1); // Negative thickness means solid fill
+                    BLUE, // The color the rectangle is drawn in
+                    1); // Negative thickness means solid fill
             return input;
         }
         public int getAnalysis()
