@@ -28,6 +28,6 @@ public class AnnatarTeleop extends OpMode {
         base.autoTransfer(); //Automatically lift rings once in transfer
         base.launchAngle(); //Change Launch Angle
         base.controlWobbleGoal(); //Wobble Goal Controls
-        base.sensorTest();
+        base.autoPowerShots();
     }
 }

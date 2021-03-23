@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
@@ -36,7 +37,7 @@ class AnnatarBase {
     Orientation angles;              // IMU Gyro's Orienting
     //External Sensors
     DistanceSensor sensorTransfer;
-    DistanceSensor sensorLauncher;
+    DigitalChannel sensorRotation;
     //Camera
     OpenCvCamera webcam;
     // Stores the robot's heading at the end of autonomous to be used in teleop
@@ -90,7 +91,8 @@ class AnnatarBase {
     boolean launchForwards = false;
     boolean powerShots = false;
     boolean disableAutoTransfer = false;
-    boolean launchNow = false;
+    boolean autoPowerShots = false;
+    boolean resetTransfer = false;
     String angleTarget;
     int finalTransferTarget;
     double targetPosition1;
@@ -120,8 +122,12 @@ class AnnatarBase {
     private enum LaunchAngleState{
         IDLE, MOVING, STOPPING
     }
+    private enum ResetTransferState{
+        IDLE, MEASURING, MOVING
+    }
     TransferState transfer = TransferState.IDLE;     // What step is the ATS on?
     LaunchAngleState launchAngle = LaunchAngleState.IDLE;
+    ResetTransferState reset = ResetTransferState.IDLE;
 
     public AnnatarBase(OpMode theOpMode) {
         opMode = theOpMode;
@@ -173,7 +179,9 @@ class AnnatarBase {
         imu.initialize(parameters_IMU);
 
         sensorTransfer = opMode.hardwareMap.get(DistanceSensor.class, "sensorTransfer");
-        sensorLauncher = opMode.hardwareMap.get(DistanceSensor.class, "sensorLauncher");
+        sensorRotation = opMode.hardwareMap.get(DigitalChannel.class, "sensorRotation");
+
+        sensorRotation.setMode(DigitalChannel.Mode.INPUT);
 
         timerOpMode = new ElapsedTime();
         timerTravel = new ElapsedTime();
@@ -305,12 +313,6 @@ class AnnatarBase {
             opMode.telemetry.addData("newSpeed", newSpeed);
             opMode.telemetry.addData("finalSpeed", finalSpeed);
             opMode.telemetry.update();
-
-            if (sensorLauncher.getDistance(DistanceUnit.CM) <= 1.2){
-                motorTransfer.setPower(0);
-                sleep(1000);
-                motorTransfer.setPower(-.6);
-            }
         }
 
         motorLaunch.setPower(0);
@@ -666,7 +668,7 @@ class AnnatarBase {
             // Lift the ring one rotation
             case 1:
                 currentTransferPosition = motorTransfer.getCurrentPosition();
-                    transfer = TransferState.RAISING;
+                transfer = TransferState.RAISING;
                 break;
             case 2:
                 transferTarget = (int) currentTransferPosition - 730;
@@ -682,6 +684,9 @@ class AnnatarBase {
     }
     public void controlTransfer() {
             motorTransfer.setPower(-opMode.gamepad2.right_stick_x);
+            if (opMode.gamepad2.right_stick_x > Math.abs(.01)){
+                reset = ResetTransferState.IDLE;
+            }
 
             //Lock the transfer in the ready to collect position
             if (opMode.gamepad2.right_bumper) {
@@ -697,6 +702,48 @@ class AnnatarBase {
             else {
                 motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             }
+
+            if (opMode.gamepad2.b){
+
+                motorTransfer.setPower(-.3);
+                if (sensorRotation.getState() == false){
+                    motorTransfer.setPower(0);
+                    motorTransfer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                    motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                    motorTransfer.setTargetPosition(166);
+                    motorTransfer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                }
+            }
+            if (opMode.gamepad2.b){
+                resetTransfer = true;
+            }
+        // State machines allow us to run a sequence program within an updating loop.
+        switch(reset.ordinal())  {
+            // If "gamepad2.b" is pressed and we aren't already moving
+            case 0:
+                if (resetTransfer && reset == ResetTransferState.IDLE){
+                    reset = ResetTransferState.MEASURING;
+                }
+                break;
+            // Lift the ring one rotation
+            case 1:
+                motorTransfer.setPower(-.3);
+                if (sensorRotation.getState() == false){
+                    motorTransfer.setPower(0);
+                    motorTransfer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                    reset = ResetTransferState.MOVING;
+                }
+                break;
+            case 2:
+                motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                motorTransfer.setPower(.5);
+                if (motorTransfer.getCurrentPosition() >= 150){
+                    motorTransfer.setPower(0);
+                    resetTransfer = false;
+                    reset = ResetTransferState.IDLE;
+                }
+                break;
+        }
         }
     public void controlWobbleGoal(){
         motorArm.setPower(-opMode.gamepad2.right_stick_y * 2);
@@ -845,14 +892,22 @@ class AnnatarBase {
         }
     }
 
-    public void sensorTest(){
-        if (sensorLauncher.getDistance(DistanceUnit.CM) <= 1.2){
-            launchNow = true;
+    public void autoPowerShots(){
+        if (opMode.gamepad1.right_stick_button){
+            autoPowerShots = true;
         }
-        else {
-            launchNow = false;
+        if (autoPowerShots == true){
+            setDrivePowerMotors(-.5, .5, .5, -.5);
+            if (xPosition <= -20){
+                setDrivePower(0);
+                autoPowerShots = false;
+            }
+            else {
+
+            }
         }
     }
+
 
     /** All telemetry readings are posted down here.*/
     public void postTelemetry() {
@@ -862,7 +917,7 @@ class AnnatarBase {
         opMode.telemetry.addData("finalSpeed", finalSpeed);
         opMode.telemetry.addData("launchPower", wheelSpeedMultiplier);
         opMode.telemetry.addData("launchAngle", motorArm.getCurrentPosition());
-        opMode.telemetry.addData("launchNow", launchNow);
+        opMode.telemetry.addData("transfer", motorTransfer.getCurrentPosition());
         //opMode.telemetry.addData("Running for...", timerOpMode.seconds());
         opMode.telemetry.update();
     }
