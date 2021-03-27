@@ -419,11 +419,15 @@ class AnnatarBase {
             }
             setDrivePowerMotors(-desiredSpeedLF, -desiredSpeedLB, desiredSpeedRF, desiredSpeedRB);
 
-            if (numberPosition == 1 && motorArm.getCurrentPosition() >= HIGH_GOAL_ANGLE_MIN -8500){
+            if (numberPosition == 1 && motorArm.getCurrentPosition() >= HIGH_GOAL_ANGLE_MIN -16000){
                 servoLaunchAngle.setPower(0);
                 servoLaunchAngle2.setPower(0);
             }
-            if (motorArm.getCurrentPosition() >= HIGH_GOAL_ANGLE_MIN -5000 && (numberPosition == 0 || numberPosition == 4)){
+            if (motorArm.getCurrentPosition() >= HIGH_GOAL_ANGLE_MIN -14500 && numberPosition == 0){
+                servoLaunchAngle.setPower(0);
+                servoLaunchAngle2.setPower(0);
+            }
+            if (motorArm.getCurrentPosition() >= HIGH_GOAL_ANGLE_MIN -17000 && numberPosition == 4){
                 servoLaunchAngle.setPower(0);
                 servoLaunchAngle2.setPower(0);
             }
@@ -521,13 +525,13 @@ class AnnatarBase {
                 sleep(350);
                 motorArm.setPower(0);
                 travelToPosition(-50, 10, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
-                travelToPosition(-128, -25, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
+                travelToPosition(-136, -13, 90, TARGET_POSITION_ACCURACY_IN_INCHES);
                 servoGoal.setPower(-1);
                 sleep(750);
                 servoGoal.setPower(0);
                 servoLaunchAngle.setPower(0);
                 servoLaunchAngle2.setPower(0);
-                travelToPosition(-122, -10, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
+                travelToPosition(-121, -10, 90, WAYPOINT_POSITION_ACCURACY_IN_INCHES, 100);
             }
         }
     }
@@ -688,22 +692,7 @@ class AnnatarBase {
                 reset = ResetTransferState.IDLE;
             }
 
-            //Lock the transfer in the ready to collect position
-            if (opMode.gamepad2.right_bumper) {
-                rotation = 750; //Number of ticks for one full rotation
-                currentTransferPosition = motorTransfer.getCurrentPosition();
-                targetPosition1 = (currentTransferPosition / rotation);
-                target = Math.round(targetPosition1);
-                finalTransferTarget = (int) (target * rotation);
-                motorTransfer.setTargetPosition(finalTransferTarget);
-                motorTransfer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                motorTransfer.setPower(1);
-            }
-            else {
-                motorTransfer.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-            }
-
-            if (opMode.gamepad2.b){
+            if (opMode.gamepad2.right_bumper){
 
                 motorTransfer.setPower(-.3);
                 if (sensorRotation.getState() == false){
@@ -714,12 +703,12 @@ class AnnatarBase {
                     motorTransfer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
                 }
             }
-            if (opMode.gamepad2.b){
+            if (opMode.gamepad2.right_bumper){
                 resetTransfer = true;
             }
         // State machines allow us to run a sequence program within an updating loop.
         switch(reset.ordinal())  {
-            // If "gamepad2.b" is pressed and we aren't already moving
+            // If the right bumper is pressed and we aren't already moving
             case 0:
                 if (resetTransfer && reset == ResetTransferState.IDLE){
                     reset = ResetTransferState.MEASURING;

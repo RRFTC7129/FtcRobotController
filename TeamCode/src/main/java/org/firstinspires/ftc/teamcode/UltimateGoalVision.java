@@ -68,8 +68,8 @@ public class UltimateGoalVision extends LinearOpMode
         //x:130 y:210
         static final Point REGION1_TOPLEFT_ANCHOR_POINT = new Point(65 ,178);
         // width: 40 height: 40
-        static final int REGION_WIDTH = 130;
-        static final int REGION_HEIGHT = 65;
+        static final int REGION_WIDTH = 90;
+        static final int REGION_HEIGHT = 55; //65
         final int FOUR_RING_THRESHOLD = 133;
         final int ONE_RING_THRESHOLD = 128;
         Point region1_pointA = new Point(
